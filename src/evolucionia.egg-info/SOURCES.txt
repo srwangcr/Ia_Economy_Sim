@@ -1,0 +1,16 @@
+README.md
+pyproject.toml
+src/evolucionia/__init__.py
+src/evolucionia/__main__.py
+src/evolucionia/cli.py
+src/evolucionia/config.py
+src/evolucionia/dashboard.py
+src/evolucionia/database.py
+src/evolucionia/models.py
+src/evolucionia/simulation.py
+src/evolucionia.egg-info/PKG-INFO
+src/evolucionia.egg-info/SOURCES.txt
+src/evolucionia.egg-info/dependency_links.txt
+src/evolucionia.egg-info/entry_points.txt
+src/evolucionia.egg-info/requires.txt
+src/evolucionia.egg-info/top_level.txt

@@ -1,0 +1,14 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: evolucionia
+      POSTGRES_PASSWORD: evolucionia
+      POSTGRES_DB: evolucionia
+    ports:
+      - "5432:5432"
+    volumes:
+      - evolucionia_pgdata:/var/lib/postgresql/data
+
+volumes:
+  evolucionia_pgdata:

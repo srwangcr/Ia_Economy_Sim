@@ -1,0 +1,37 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "EvolucionIA: run simulation",
+      "type": "shell",
+      "command": ".venv/bin/python",
+      "args": ["-m", "evolucionia.cli", "run", "--ticks", "120"],
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "EvolucionIA: open dashboard",
+      "type": "shell",
+      "command": ".venv/bin/streamlit",
+      "args": ["run", "dashboard.py"],
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "EvolucionIA: run tests",
+      "type": "shell",
+      "command": ".venv/bin/python",
+      "args": ["-m", "pytest"],
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "EvolucionIA: alembic upgrade head",
+      "type": "shell",
+      "command": ".venv/bin/alembic",
+      "args": ["upgrade", "head"],
+      "group": "build",
+      "problemMatcher": []
+    }
+  ]
+}

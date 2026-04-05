@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "evolucionia"
+version = "0.1.0"
+description = "Simulation of financial agents with PostgreSQL persistence and a Streamlit dashboard"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "deap>=1.4.1",
+  "alembic>=1.14",
+  "numpy>=1.26",
+  "pandas>=2.2",
+  "plotly>=5.24",
+  "sqlalchemy>=2.0",
+  "streamlit>=1.37",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+]
+
+[project.scripts]
+evolucionia = "evolucionia.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

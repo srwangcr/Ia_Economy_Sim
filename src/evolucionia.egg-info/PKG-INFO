@@ -1,0 +1,54 @@
+Metadata-Version: 2.4
+Name: evolucionia
+Version: 0.1.0
+Summary: Simulation of financial agents with PostgreSQL persistence and a Streamlit dashboard
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: numpy>=1.26
+Requires-Dist: pandas>=2.2
+Requires-Dist: plotly>=5.24
+Requires-Dist: sqlalchemy>=2.0
+Requires-Dist: streamlit>=1.37
+
+# EvolucionIA
+
+EvolucionIA es un simulador de mercado con agentes heterogeneos, persistencia transaccional y un dashboard para analizar la dinamica economica.
+
+## Que incluye
+
+- Agentes con perfiles distintos: mineros, especuladores y consumidores.
+- Log de transacciones y snapshots por tick en una base SQL.
+- Evolucion de parametros por generacion con mutacion ligera.
+- Dashboard en Streamlit con precios, riqueza y supervivencia.
+- Soporte para PostgreSQL via `DATABASE_URL`.
+
+## Arranque rapido
+
+1. Crear y activar un entorno Python 3.11+.
+2. Instalar dependencias.
+3. Ejecutar una simulacion:
+
+```bash
+python -m evolucionia.cli run --ticks 120
+```
+
+4. Levantar el dashboard:
+
+```bash
+streamlit run src/evolucionia/dashboard.py
+```
+
+## Base de datos
+
+Por defecto usa SQLite local para facilitar pruebas. Si queres PostgreSQL, exporta `DATABASE_URL`:
+
+```bash
+export DATABASE_URL=postgresql+psycopg2://user:password@localhost:5432/evolucionia
+```
+
+## Estructura
+
+- `src/evolucionia/simulation.py`: motor principal.
+- `src/evolucionia/database.py`: capa de persistencia.
+- `src/evolucionia/dashboard.py`: analisis visual.
+- `src/evolucionia/cli.py`: comandos de linea.

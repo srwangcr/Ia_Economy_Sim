@@ -1,0 +1,2 @@
+[console_scripts]
+evolucionia = evolucionia.cli:main
