@@ -7,7 +7,7 @@ from typing import Any, Protocol, cast
 
 from deap import base, creator, tools
 
-from .models import Agent, Species
+from .models import Agent, Species, create_agent
 
 
 GENE_BOUNDS = [
@@ -26,9 +26,6 @@ def _ensure_deap_types() -> None:
     if not hasattr(creator, "Genome"):
         creator.create("Genome", list, fitness=getattr(creator, "FitnessAgent"))
 
-GenomeType = cast(type[list[float]], getattr(creator, "Genome"))
-
-
 # Tipado para métodos registrados dinámicamente en Toolbox
 class EvoToolbox(Protocol):
     def clone(self, x: list[float]) -> list[float]: ...
@@ -37,6 +34,7 @@ class EvoToolbox(Protocol):
 
 
 _ensure_deap_types()
+GenomeType = cast(type[list[float]], getattr(creator, "Genome"))
 
 _CREATOR = cast(Any, creator)
 
@@ -71,7 +69,7 @@ def encode_agent(agent: Agent):
 def decode_agent(parent: Agent, genes: list[float], new_id: int) -> Agent:
     normalized = _normalize_genes(genes)
     buy_threshold, sell_threshold, production_rate, risk_tolerance, momentum_bias, reproduction_drive = normalized
-    return Agent(
+    return create_agent(
         agent_id=new_id,
         species=parent.species,
         balance=max(0.0, parent.balance * 0.18),

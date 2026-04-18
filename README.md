@@ -2,6 +2,28 @@
 
 EvolucionIA es un simulador de mercado con agentes heterogeneos, persistencia transaccional y un dashboard para analizar la dinamica economica.
 
+## Como funciona
+
+El motor combina decisiones difusas con evolucion genetica:
+
+- Fuzzy rules: cada especie evalua reglas de compra/venta con membresias (precio bajo/alto, inventario bajo/alto, energia, tendencia).
+- DEAP: en cada generacion se toma una elite por riqueza, se forman parejas y se recombinan/mutan genes para producir descendencia.
+- Seleccion: los hijos heredan rasgos de umbrales y tolerancia al riesgo; la poblacion se ajusta segun presion del mercado y shocks macro.
+
+```mermaid
+flowchart LR
+	A[Estado del tick] --> B[Agentes deciden con fuzzy]
+	B --> C[Matching compra/venta]
+	C --> D[Precio y transacciones]
+	D --> E[Persistencia SQL]
+	E --> F[Fin de generacion?]
+	F -->|No| A
+	F -->|Si| G[Elite por riqueza]
+	G --> H[DEAP: crossover + mutacion]
+	H --> I[Nuevos agentes]
+	I --> A
+```
+
 ## Que incluye
 
 - Agentes con perfiles distintos: mineros, especuladores y consumidores.
@@ -58,6 +80,11 @@ export DATABASE_URL=postgresql+psycopg2://user:password@localhost:5432/evolucion
 ```
 
 La simulacion escribe en tablas con `run_id`, lo que permite comparar historicos y consultar corridas anteriores desde el dashboard.
+
+Optimizaciones incluidas:
+
+- Indices compuestos en rutas de consulta frecuentes (`run_id`, `tick`, `agent_id` y variantes para buyer/seller).
+- Particionado hash opcional de `transactions` por `run_id` en PostgreSQL para reducir costo de lecturas/retencion por corrida.
 
 ## Estructura
 

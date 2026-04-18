@@ -40,21 +40,46 @@ def upgrade() -> None:
     op.create_index(op.f("ix_simulation_runs_created_at"), "simulation_runs", ["created_at"], unique=False, if_not_exists=True)
     op.create_index(op.f("ix_simulation_runs_status"), "simulation_runs", ["status"], unique=False, if_not_exists=True)
 
-    op.create_table(
-        "transactions",
-        sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
-        sa.Column("run_id", sa.String(length=36), nullable=False),
-        sa.Column("tick", sa.Integer(), nullable=False),
-        sa.Column("buyer_id", sa.Integer(), nullable=False),
-        sa.Column("seller_id", sa.Integer(), nullable=False),
-        sa.Column("resource", sa.String(length=80), nullable=False),
-        sa.Column("price", sa.Float(), nullable=False),
-        sa.Column("quantity", sa.Integer(), nullable=False),
-        sa.Column("timestamp", sa.DateTime(timezone=True), nullable=False),
-        if_not_exists=True,
-    )
+    bind = op.get_bind()
+    if bind.dialect.name == "postgresql":
+        op.create_table(
+            "transactions",
+            sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
+            sa.Column("run_id", sa.String(length=36), nullable=False),
+            sa.Column("tick", sa.Integer(), nullable=False),
+            sa.Column("buyer_id", sa.Integer(), nullable=False),
+            sa.Column("seller_id", sa.Integer(), nullable=False),
+            sa.Column("resource", sa.String(length=80), nullable=False),
+            sa.Column("price", sa.Float(), nullable=False),
+            sa.Column("quantity", sa.Integer(), nullable=False),
+            sa.Column("timestamp", sa.DateTime(timezone=True), nullable=False),
+            postgresql_partition_by="HASH (run_id)",
+        )
+        for partition in range(4):
+            op.execute(
+                sa.text(
+                    f"CREATE TABLE IF NOT EXISTS transactions_p{partition} PARTITION OF transactions "
+                    f"FOR VALUES WITH (modulus 4, remainder {partition})"
+                )
+            )
+    else:
+        op.create_table(
+            "transactions",
+            sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
+            sa.Column("run_id", sa.String(length=36), nullable=False),
+            sa.Column("tick", sa.Integer(), nullable=False),
+            sa.Column("buyer_id", sa.Integer(), nullable=False),
+            sa.Column("seller_id", sa.Integer(), nullable=False),
+            sa.Column("resource", sa.String(length=80), nullable=False),
+            sa.Column("price", sa.Float(), nullable=False),
+            sa.Column("quantity", sa.Integer(), nullable=False),
+            sa.Column("timestamp", sa.DateTime(timezone=True), nullable=False),
+            if_not_exists=True,
+        )
     op.create_index("ix_transactions_resource_price", "transactions", ["resource", "price"], unique=False, if_not_exists=True)
     op.create_index("ix_transactions_run_tick", "transactions", ["run_id", "tick"], unique=False, if_not_exists=True)
+    op.create_index("ix_transactions_run_tick_buyer", "transactions", ["run_id", "tick", "buyer_id"], unique=False, if_not_exists=True)
+    op.create_index("ix_transactions_run_tick_seller", "transactions", ["run_id", "tick", "seller_id"], unique=False, if_not_exists=True)
     op.create_index(op.f("ix_transactions_run_id"), "transactions", ["run_id"], unique=False, if_not_exists=True)
     op.create_index(op.f("ix_transactions_tick"), "transactions", ["tick"], unique=False, if_not_exists=True)
 
@@ -77,6 +102,7 @@ def upgrade() -> None:
     )
     op.create_index("ix_agent_snapshots_run_agent", "agent_snapshots", ["run_id", "agent_id"], unique=False, if_not_exists=True)
     op.create_index("ix_agent_snapshots_run_tick", "agent_snapshots", ["run_id", "tick"], unique=False, if_not_exists=True)
+    op.create_index("ix_agent_snapshots_run_tick_agent", "agent_snapshots", ["run_id", "tick", "agent_id"], unique=False, if_not_exists=True)
     op.create_index(op.f("ix_agent_snapshots_run_id"), "agent_snapshots", ["run_id"], unique=False, if_not_exists=True)
     op.create_index(op.f("ix_agent_snapshots_tick"), "agent_snapshots", ["tick"], unique=False, if_not_exists=True)
 
@@ -108,12 +134,15 @@ def downgrade() -> None:
 
     op.drop_index(op.f("ix_agent_snapshots_tick"), table_name="agent_snapshots")
     op.drop_index(op.f("ix_agent_snapshots_run_id"), table_name="agent_snapshots")
+    op.drop_index("ix_agent_snapshots_run_tick_agent", table_name="agent_snapshots")
     op.drop_index("ix_agent_snapshots_run_tick", table_name="agent_snapshots")
     op.drop_index("ix_agent_snapshots_run_agent", table_name="agent_snapshots")
     op.drop_table("agent_snapshots")
 
     op.drop_index(op.f("ix_transactions_tick"), table_name="transactions")
     op.drop_index(op.f("ix_transactions_run_id"), table_name="transactions")
+    op.drop_index("ix_transactions_run_tick_seller", table_name="transactions")
+    op.drop_index("ix_transactions_run_tick_buyer", table_name="transactions")
     op.drop_index("ix_transactions_run_tick", table_name="transactions")
     op.drop_index("ix_transactions_resource_price", table_name="transactions")
     op.drop_table("transactions")

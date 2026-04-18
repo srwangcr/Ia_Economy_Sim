@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from .config import Settings
 from .database import finalize_run, init_db, new_run_id, save_tick, start_run
 from .genetics import build_child, build_toolbox, rank_children
-from .models import Agent, Species
+from .models import Agent, Species, create_agent
 
 
 @dataclass
@@ -53,7 +53,7 @@ class SimulationEngine:
                 buy_threshold, sell_threshold, production_rate = 10.5, 15.5, 1
                 risk_tolerance, momentum_bias, reproduction_drive = 0.2, 0.35, 0.45
             agents.append(
-                Agent(
+                create_agent(
                     agent_id=agent_id,
                     species=species,
                     balance=balance,
@@ -83,7 +83,7 @@ class SimulationEngine:
 
     def _produce_resources(self, scarcity: float) -> None:
         for agent in self._alive_agents():
-            agent.apply_macro_pressure(scarcity)
+            agent.evolve(scarcity)
             if agent.species == Species.MINER and agent.energy > 0:
                 produced = max(1, int(round(agent.production_rate / max(0.75, scarcity))))
                 agent.inventory += produced
@@ -100,60 +100,15 @@ class SimulationEngine:
             if agent.energy <= 0 and agent.species != Species.SPECULATOR and agent.inventory <= 0:
                 agent.alive = False
 
-    @staticmethod
-    def _low_membership(value: float, threshold: float) -> float:
-        if threshold <= 0:
-            return 0.0
-        return max(0.0, min(1.0, (threshold - value) / threshold))
-
-    @staticmethod
-    def _high_membership(value: float, threshold: float) -> float:
-        if threshold <= 0:
-            return 0.0
-        return max(0.0, min(1.0, (value - threshold) / threshold))
-
-    @staticmethod
-    def _trend_up(trend: float, price: float) -> float:
-        if price <= 0:
-            return 0.0
-        return max(0.0, min(1.0, trend / price))
-
-    @staticmethod
-    def _trend_down(trend: float, price: float) -> float:
-        if price <= 0:
-            return 0.0
-        return max(0.0, min(1.0, (-trend) / price))
-
     def _intent_lists(self, price: float, trend: float) -> tuple[list[Agent], list[Agent]]:
         buyers: list[Agent] = []
         sellers: list[Agent] = []
         for agent in self._alive_agents():
-            price_low = self._low_membership(price, agent.buy_threshold)
-            price_high = self._high_membership(price, agent.sell_threshold)
-            stock_low = self._low_membership(float(agent.inventory), 2.0)
-            stock_high = self._high_membership(float(agent.inventory), 2.0)
-            energy_low = self._low_membership(agent.energy, 10.0)
-            trend_up = self._trend_up(trend, price)
-            trend_down = self._trend_down(trend, price)
-
-            if agent.species == Species.CONSUMER:
-                buy_score = 0.45 * price_low + 0.35 * stock_low + 0.2 * energy_low
-                if buy_score >= 0.42 and agent.balance >= price:
-                    buyers.append(agent)
-            elif agent.species == Species.MINER:
-                sell_score = 0.5 * stock_high + 0.3 * price_high + 0.2 * energy_low
-                buy_score = 0.35 * price_low + 0.25 * trend_up + 0.4 * (1.0 - agent.risk_tolerance)
-                if sell_score >= 0.4 and agent.inventory > 0:
-                    sellers.append(agent)
-                elif buy_score >= 0.55 and agent.balance >= price:
-                    buyers.append(agent)
-            else:
-                buy_score = 0.4 * price_low + 0.35 * trend_up * agent.momentum_bias + 0.25 * (1.0 - agent.risk_tolerance)
-                sell_score = 0.45 * price_high + 0.35 * trend_down * (1.25 - agent.momentum_bias) + 0.2 * agent.risk_tolerance
-                if buy_score >= 0.48 and agent.balance >= price:
-                    buyers.append(agent)
-                if sell_score >= 0.48 and agent.inventory > 0:
-                    sellers.append(agent)
+            decision = agent.decide(price, trend)
+            if decision in ("buy", "both"):
+                buyers.append(agent)
+            if decision in ("sell", "both"):
+                sellers.append(agent)
 
         return buyers, sellers
 
@@ -205,13 +160,17 @@ class SimulationEngine:
         updated = base_price * (1 + swing) * shock
         return max(0.75, min(250.0, updated))
 
+    def _select_elite(self, alive_agents: list[Agent]) -> list[Agent]:
+        ranked = sorted(alive_agents, key=lambda agent: agent.wealth(self.price), reverse=True)
+        elite_count = max(4, len(ranked) // 3)
+        return [agent for agent in ranked[:elite_count] if agent.wealth(self.price) >= 85.0]
+
     def _maybe_reproduce(self) -> None:
-        alive = sorted(self._alive_agents(), key=lambda agent: agent.wealth(self.price), reverse=True)
+        alive = self._alive_agents()
         if len(alive) < 2:
             return
 
-        elite_count = max(4, len(alive) // 3)
-        elite = [agent for agent in alive[:elite_count] if agent.wealth(self.price) >= 85.0]
+        elite = self._select_elite(alive)
         if len(elite) < 2:
             return
 

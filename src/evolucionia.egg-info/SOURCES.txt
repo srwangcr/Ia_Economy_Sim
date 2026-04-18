@@ -6,6 +6,7 @@ src/evolucionia/cli.py
 src/evolucionia/config.py
 src/evolucionia/dashboard.py
 src/evolucionia/database.py
+src/evolucionia/genetics.py
 src/evolucionia/models.py
 src/evolucionia/simulation.py
 src/evolucionia.egg-info/PKG-INFO
@@ -14,3 +15,5 @@ src/evolucionia.egg-info/dependency_links.txt
 src/evolucionia.egg-info/entry_points.txt
 src/evolucionia.egg-info/requires.txt
 src/evolucionia.egg-info/top_level.txt
+tests/test_database.py
+tests/test_simulation.py

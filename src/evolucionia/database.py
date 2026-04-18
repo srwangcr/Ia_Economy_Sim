@@ -36,7 +36,10 @@ class TransactionRow(Base):
     __tablename__ = "transactions"
     __table_args__ = (
         Index("ix_transactions_run_tick", "run_id", "tick"),
+        Index("ix_transactions_run_tick_buyer", "run_id", "tick", "buyer_id"),
+        Index("ix_transactions_run_tick_seller", "run_id", "tick", "seller_id"),
         Index("ix_transactions_resource_price", "resource", "price"),
+        {"postgresql_partition_by": "HASH (run_id)"},
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -55,6 +58,7 @@ class AgentSnapshotRow(Base):
     __table_args__ = (
         Index("ix_agent_snapshots_run_tick", "run_id", "tick"),
         Index("ix_agent_snapshots_run_agent", "run_id", "agent_id"),
+        Index("ix_agent_snapshots_run_tick_agent", "run_id", "tick", "agent_id"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)

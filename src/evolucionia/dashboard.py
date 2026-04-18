@@ -91,6 +91,26 @@ def get_engine(database_url: str):
     return engine
 
 
+@st.cache_data(show_spinner=False)
+def load_simulation_runs_cached(database_url: str) -> pd.DataFrame:
+    return load_simulation_runs(get_engine(database_url))
+
+
+@st.cache_data(show_spinner=False)
+def load_market_snapshots_cached(database_url: str, run_id: str) -> pd.DataFrame:
+    return load_market_snapshots(get_engine(database_url), run_id)
+
+
+@st.cache_data(show_spinner=False)
+def load_agent_snapshots_cached(database_url: str, run_id: str) -> pd.DataFrame:
+    return load_agent_snapshots(get_engine(database_url), run_id)
+
+
+@st.cache_data(show_spinner=False)
+def load_transactions_cached(database_url: str, run_id: str) -> pd.DataFrame:
+    return load_transactions(get_engine(database_url), run_id)
+
+
 def run_simulation(engine, settings: Settings) -> dict:
     session = session_factory(engine)()
     try:
@@ -269,11 +289,12 @@ def main():
     if st.sidebar.button("Ejecutar simulacion", use_container_width=True):
         with st.spinner("Corriendo simulacion..."):
             summary = run_simulation(engine, settings)
+        st.cache_data.clear()
         st.session_state["selected_run_id"] = summary["run_id"]
         st.toast("Simulacion completada", icon="✅")
         st.rerun()
 
-    runs_df = load_simulation_runs(engine)
+    runs_df = load_simulation_runs_cached(database_url)
     if runs_df.empty:
         st.info("Todavia no hay corridas almacenadas. Ejecuta una simulacion desde la barra lateral.")
         return
@@ -293,9 +314,24 @@ def main():
     st.session_state["selected_run_id"] = selected_run_id
 
     run_row = runs_df[runs_df["run_id"] == selected_run_id].iloc[0]
-    market_df = load_market_snapshots(engine, selected_run_id)
-    agent_df = load_agent_snapshots(engine, selected_run_id)
-    transaction_df = load_transactions(engine, selected_run_id)
+    market_df = load_market_snapshots_cached(database_url, selected_run_id)
+    agent_df = load_agent_snapshots_cached(database_url, selected_run_id)
+    transaction_df = load_transactions_cached(database_url, selected_run_id)
+
+    species_options = sorted(agent_df["species"].dropna().astype(str).unique().tolist()) if not agent_df.empty else []
+    selected_species = st.multiselect(
+        "Tipo de agente",
+        options=species_options,
+        default=species_options,
+        help="Filtra snapshots y transacciones donde participa al menos un agente del tipo seleccionado.",
+    )
+    if species_options and selected_species and len(selected_species) < len(species_options):
+        agent_df = agent_df[agent_df["species"].isin(selected_species)].copy()
+        allowed_agent_ids = set(agent_df["agent_id"].astype(int).unique().tolist())
+        transaction_df = transaction_df[
+            transaction_df["buyer_id"].isin(allowed_agent_ids)
+            | transaction_df["seller_id"].isin(allowed_agent_ids)
+        ].copy()
 
     max_tick = int(market_df["tick"].max()) if not market_df.empty else 0
     replay_mode = st.toggle("Reproducción guiada", value=True)
@@ -361,7 +397,15 @@ def main():
             st.caption("Esta barra resume qué porcentaje de cada especie sigue vivo en el tick seleccionado. Es útil para ver selección natural y adaptación.")
 
     st.subheader("Ultimas transacciones")
-    st.dataframe(transaction_df.tail(20), use_container_width=True, hide_index=True)
+    export_df = transaction_df if current_tick <= 0 else transaction_df[transaction_df["tick"] <= current_tick]
+    st.download_button(
+        "Exportar CSV",
+        data=export_df.to_csv(index=False).encode("utf-8"),
+        file_name=f"transactions_{selected_run_id}.csv",
+        mime="text/csv",
+        use_container_width=False,
+    )
+    st.dataframe(export_df.tail(20), use_container_width=True, hide_index=True)
     st.caption("Cada fila representa una transacción individual del ledger. Es la fuente para auditar el mercado y reconstruir el historial completo.")
 
     st.subheader("Historico de corridas")
