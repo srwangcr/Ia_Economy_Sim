@@ -10,6 +10,7 @@ from .config import Settings
 from .database import finalize_run, init_db, new_run_id, save_tick, start_run
 from .genetics import build_child, build_toolbox, rank_children
 from .models import Agent, Species, create_agent
+from .scaling import build_decision_backend
 
 
 @dataclass
@@ -34,6 +35,7 @@ class SimulationEngine:
         self.generation_index = 0
         self.run_id = new_run_id()
         self.toolbox = build_toolbox(settings.seed)
+        self.decision_backend = build_decision_backend(settings.compute_backend, settings.compute_workers)
 
     def _create_agents(self, count: int) -> list[Agent]:
         species_cycle = [Species.MINER, Species.SPECULATOR, Species.CONSUMER]
@@ -103,8 +105,14 @@ class SimulationEngine:
     def _intent_lists(self, price: float, trend: float) -> tuple[list[Agent], list[Agent]]:
         buyers: list[Agent] = []
         sellers: list[Agent] = []
-        for agent in self._alive_agents():
-            decision = agent.decide(price, trend)
+        alive = self._alive_agents()
+        decision_rows = self.decision_backend.evaluate(alive, price, trend)
+        by_id = {agent.agent_id: agent for agent in alive}
+        for row in decision_rows:
+            agent = by_id.get(row.agent_id)
+            if agent is None:
+                continue
+            decision = row.decision
             if decision in ("buy", "both"):
                 buyers.append(agent)
             if decision in ("sell", "both"):
@@ -234,48 +242,51 @@ class SimulationEngine:
         previous_close = self.price
         last_close = self.price
 
-        for tick in range(1, total_ticks + 1):
-            shock = self._macro_shock(tick)
-            self._produce_resources(shock)
-            alive_agents = self._alive_agents()
-            trend = previous_close - last_close
-            buyers, sellers = self._intent_lists(previous_close, trend)
-            open_price = previous_close
-            close_price = self._price_update(previous_close, buyers, sellers, shock)
-            transactions = self._execute_market(close_price, buyers, sellers)
-            price_candidates = [open_price, close_price, *(transaction["price"] for transaction in transactions)]
-            high_price = max(price_candidates)
-            low_price = min(price_candidates)
-            market_row = {
-                "open_price": round(open_price, 4),
-                "high_price": round(high_price, 4),
-                "low_price": round(low_price, 4),
-                "close_price": round(close_price, 4),
-                "shock_factor": round(shock, 4),
-                "buyers_count": len(buyers),
-                "sellers_count": len(sellers),
-                "active_agents": len(alive_agents),
-            }
-            self.price = close_price
-            self.tick_results.append(
-                TickResult(
-                    tick=tick,
-                    price=close_price,
-                    transactions=len(transactions),
-                    buyers=len(buyers),
-                    sellers=len(sellers),
-                    survivors=len(alive_agents),
+        try:
+            for tick in range(1, total_ticks + 1):
+                shock = self._macro_shock(tick)
+                self._produce_resources(shock)
+                alive_agents = self._alive_agents()
+                trend = previous_close - last_close
+                buyers, sellers = self._intent_lists(previous_close, trend)
+                open_price = previous_close
+                close_price = self._price_update(previous_close, buyers, sellers, shock)
+                transactions = self._execute_market(close_price, buyers, sellers)
+                price_candidates = [open_price, close_price, *(transaction["price"] for transaction in transactions)]
+                high_price = max(price_candidates)
+                low_price = min(price_candidates)
+                market_row = {
+                    "open_price": round(open_price, 4),
+                    "high_price": round(high_price, 4),
+                    "low_price": round(low_price, 4),
+                    "close_price": round(close_price, 4),
+                    "shock_factor": round(shock, 4),
+                    "buyers_count": len(buyers),
+                    "sellers_count": len(sellers),
+                    "active_agents": len(alive_agents),
+                }
+                self.price = close_price
+                self.tick_results.append(
+                    TickResult(
+                        tick=tick,
+                        price=close_price,
+                        transactions=len(transactions),
+                        buyers=len(buyers),
+                        sellers=len(sellers),
+                        survivors=len(alive_agents),
+                    )
                 )
-            )
-            save_tick(self.session, self.run_id, tick, market_row, transactions, self._agent_rows())
-            self.session.commit()
-            last_close = previous_close
-            previous_close = close_price
+                save_tick(self.session, self.run_id, tick, market_row, transactions, self._agent_rows())
+                self.session.commit()
+                last_close = previous_close
+                previous_close = close_price
 
-            self._remove_extinct_agents()
-            if tick % self.settings.generation_length == 0:
-                self._maybe_reproduce()
-                self.generation_index += 1
+                self._remove_extinct_agents()
+                if tick % self.settings.generation_length == 0:
+                    self._maybe_reproduce()
+                    self.generation_index += 1
+        finally:
+            self.decision_backend.close()
 
         summary = self.summary()
         finalize_run(self.session, self.run_id, summary)

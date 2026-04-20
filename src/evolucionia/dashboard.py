@@ -85,30 +85,31 @@ st.markdown(
 
 
 @st.cache_resource
-def get_engine(database_url: str):
+def get_engine(database_url: str, initialize: bool = False):
     engine = build_engine(database_url)
-    init_db(engine)
+    if initialize:
+        init_db(engine)
     return engine
 
 
 @st.cache_data(show_spinner=False)
 def load_simulation_runs_cached(database_url: str) -> pd.DataFrame:
-    return load_simulation_runs(get_engine(database_url))
+    return load_simulation_runs(get_engine(database_url, initialize=False))
 
 
 @st.cache_data(show_spinner=False)
 def load_market_snapshots_cached(database_url: str, run_id: str) -> pd.DataFrame:
-    return load_market_snapshots(get_engine(database_url), run_id)
+    return load_market_snapshots(get_engine(database_url, initialize=False), run_id)
 
 
 @st.cache_data(show_spinner=False)
 def load_agent_snapshots_cached(database_url: str, run_id: str) -> pd.DataFrame:
-    return load_agent_snapshots(get_engine(database_url), run_id)
+    return load_agent_snapshots(get_engine(database_url, initialize=False), run_id)
 
 
 @st.cache_data(show_spinner=False)
 def load_transactions_cached(database_url: str, run_id: str) -> pd.DataFrame:
-    return load_transactions(get_engine(database_url), run_id)
+    return load_transactions(get_engine(database_url, initialize=False), run_id)
 
 
 def run_simulation(engine, settings: Settings) -> dict:
@@ -270,6 +271,11 @@ def main():
     )
 
     database_url = st.sidebar.text_input("DATABASE_URL", os.getenv("DATABASE_URL", "sqlite:///evolucionia_runs.db"))
+    read_database_url = st.sidebar.text_input(
+        "READ_DATABASE_URL",
+        os.getenv("READ_DATABASE_URL", database_url),
+        help="Opcional: URL de replica de lectura para consultas del dashboard.",
+    )
     initial_agents = st.sidebar.slider("Agentes iniciales", 15, 250, 60, 5)
     ticks = st.sidebar.slider("Ticks", 20, 240, 120, 10)
     initial_price = st.sidebar.slider("Precio inicial", 1.0, 50.0, 10.0, 0.5)
@@ -277,6 +283,7 @@ def main():
 
     settings = Settings(
         database_url=database_url,
+        read_database_url=read_database_url,
         initial_agents=initial_agents,
         ticks=ticks,
         generation_length=30,
@@ -284,17 +291,20 @@ def main():
         seed=int(seed),
     )
 
-    engine = get_engine(database_url)
+    write_engine = get_engine(database_url, initialize=True)
 
     if st.sidebar.button("Ejecutar simulacion", use_container_width=True):
         with st.spinner("Corriendo simulacion..."):
-            summary = run_simulation(engine, settings)
+            summary = run_simulation(write_engine, settings)
         st.cache_data.clear()
         st.session_state["selected_run_id"] = summary["run_id"]
         st.toast("Simulacion completada", icon="✅")
         st.rerun()
 
-    runs_df = load_simulation_runs_cached(database_url)
+    runs_df = load_simulation_runs_cached(read_database_url)
+    if runs_df.empty and read_database_url != database_url:
+        st.warning("La replica de lectura no devolvio corridas. Mostrando datos desde la base primaria.")
+        runs_df = load_simulation_runs_cached(database_url)
     if runs_df.empty:
         st.info("Todavia no hay corridas almacenadas. Ejecuta una simulacion desde la barra lateral.")
         return
@@ -314,9 +324,13 @@ def main():
     st.session_state["selected_run_id"] = selected_run_id
 
     run_row = runs_df[runs_df["run_id"] == selected_run_id].iloc[0]
-    market_df = load_market_snapshots_cached(database_url, selected_run_id)
-    agent_df = load_agent_snapshots_cached(database_url, selected_run_id)
-    transaction_df = load_transactions_cached(database_url, selected_run_id)
+    market_df = load_market_snapshots_cached(read_database_url, selected_run_id)
+    agent_df = load_agent_snapshots_cached(read_database_url, selected_run_id)
+    transaction_df = load_transactions_cached(read_database_url, selected_run_id)
+    if read_database_url != database_url and market_df.empty:
+        market_df = load_market_snapshots_cached(database_url, selected_run_id)
+        agent_df = load_agent_snapshots_cached(database_url, selected_run_id)
+        transaction_df = load_transactions_cached(database_url, selected_run_id)
 
     species_options = sorted(agent_df["species"].dropna().astype(str).unique().tolist()) if not agent_df.empty else []
     selected_species = st.multiselect(

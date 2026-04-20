@@ -96,7 +96,10 @@ class MarketSnapshotRow(Base):
 
 
 def build_engine(database_url: str):
-    return create_engine(database_url, future=True)
+    kwargs = {"future": True, "pool_pre_ping": True}
+    if database_url.startswith("sqlite"):
+        kwargs["connect_args"] = {"check_same_thread": False}
+    return create_engine(database_url, **kwargs)
 
 
 def session_factory(engine):

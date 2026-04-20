@@ -67,6 +67,18 @@ flowchart TB
 .venv/bin/python -m evolucionia.cli run --ticks 120
 ```
 
+Opcional para escalar decisiones de agentes por tick con multiproceso:
+
+```bash
+.venv/bin/python -m evolucionia.cli run --ticks 120 --compute-backend process --compute-workers 4
+```
+
+Validar una corrida contra datos reales (CSV con columna `close` o `price`):
+
+```bash
+.venv/bin/python -m evolucionia.cli backtest --dataset data/market_reference.csv --run-id <run_id>
+```
+
 4. Levantar el dashboard:
 
 ```bash
@@ -118,10 +130,36 @@ export DATABASE_URL=postgresql+psycopg2://user:password@localhost:5432/evolucion
 
 La simulacion escribe por corrida usando `run_id`, lo que permite comparar historicos y consultar corridas anteriores desde el dashboard.
 
+Para separar carga de escritura y analitica, el dashboard admite replica de lectura con `READ_DATABASE_URL`. Si no esta definida, usa `DATABASE_URL`.
+
 Optimizaciones incluidas en el codigo actual:
 
 - Indices compuestos en rutas de consulta frecuentes (`run_id`, `tick`, `agent_id` y variantes para buyer/seller).
 - Particionado hash opcional de `transactions` por `run_id` en PostgreSQL.
+- Soporte de replica de lectura para consultas del dashboard y fallback automatico a primaria.
+
+## Validacion Estadistica (Backtesting)
+
+El comando `backtest` compara la serie simulada (`market_snapshots.close_price`) con una serie real de referencia y devuelve:
+
+- `mape_price`: error porcentual medio absoluto de precios.
+- `mean_return_gap`: brecha de retorno medio logaritmico.
+- `volatility_gap`: diferencia de volatilidad de retornos.
+- `directional_accuracy`: precision en direccion del retorno.
+- `ks_distance`: distancia Kolmogorov-Smirnov sobre retornos normalizados.
+- `composite_score`: score agregado para calibracion.
+
+Tambien genera recomendaciones para ajustar funciones de membresia (umbrales de compra/venta, `momentum_bias`, `risk_tolerance`, `reproduction_drive`) cuando detecta desalineaciones.
+
+## CI/CD de Migraciones
+
+Se agrego un workflow de integridad en `.github/workflows/db-integrity.yml` que:
+
+- Ejecuta pruebas de roundtrip de Alembic (upgrade/downgrade).
+- Aplica `alembic upgrade head` en base limpia.
+- Corre pruebas de base de datos, simulacion y validacion antes de aprobar cambios.
+
+Este flujo reduce riesgo de regresiones de esquema y de inconsistencias de datos en despliegues.
 
 ## Estructura
 
@@ -213,6 +251,18 @@ flowchart TB
 .venv/bin/python -m evolucionia.cli run --ticks 120
 ```
 
+Optional for scaling agent decisions with multiprocessing:
+
+```bash
+.venv/bin/python -m evolucionia.cli run --ticks 120 --compute-backend process --compute-workers 4
+```
+
+Validate a run against a real market dataset (CSV with `close` or `price` column):
+
+```bash
+.venv/bin/python -m evolucionia.cli backtest --dataset data/market_reference.csv --run-id <run_id>
+```
+
 4. Launch the dashboard:
 
 ```bash
@@ -264,10 +314,36 @@ export DATABASE_URL=postgresql+psycopg2://user:password@localhost:5432/evolucion
 
 The simulation writes per run using `run_id`, which makes it possible to compare histories and inspect previous runs from the dashboard.
 
+To split write and analytics load, the dashboard supports a read replica through `READ_DATABASE_URL`. If it is not set, it falls back to `DATABASE_URL`.
+
 Current code optimizations:
 
 - Composite indexes on frequent query paths (`run_id`, `tick`, `agent_id`, and buyer/seller variants).
 - Optional hash partitioning of `transactions` by `run_id` in PostgreSQL.
+- Read-replica support for dashboard-heavy query workloads, with automatic primary fallback.
+
+## Statistical Validation (Backtesting)
+
+The `backtest` command compares simulated market prices (`market_snapshots.close_price`) against a real reference series and reports:
+
+- `mape_price`: mean absolute percentage error of prices.
+- `mean_return_gap`: gap in average log return.
+- `volatility_gap`: volatility difference between return series.
+- `directional_accuracy`: sign-direction accuracy of returns.
+- `ks_distance`: Kolmogorov-Smirnov distance on normalized returns.
+- `composite_score`: weighted score for calibration.
+
+It also generates membership-function tuning hints for thresholds and behavioral parameters (`momentum_bias`, `risk_tolerance`, `reproduction_drive`) when the simulator diverges from real stylized facts.
+
+## Migration CI/CD
+
+The workflow in `.github/workflows/db-integrity.yml` now:
+
+- Runs Alembic upgrade/downgrade roundtrip tests.
+- Applies `alembic upgrade head` on a clean database.
+- Executes simulation/database/validation tests before schema-related changes are accepted.
+
+This hardens production deployment by catching schema and data integrity regressions early.
 
 ## Structure
 

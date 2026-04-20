@@ -8,7 +8,9 @@ src/evolucionia/dashboard.py
 src/evolucionia/database.py
 src/evolucionia/genetics.py
 src/evolucionia/models.py
+src/evolucionia/scaling.py
 src/evolucionia/simulation.py
+src/evolucionia/validation.py
 src/evolucionia.egg-info/PKG-INFO
 src/evolucionia.egg-info/SOURCES.txt
 src/evolucionia.egg-info/dependency_links.txt
@@ -16,4 +18,6 @@ src/evolucionia.egg-info/entry_points.txt
 src/evolucionia.egg-info/requires.txt
 src/evolucionia.egg-info/top_level.txt
 tests/test_database.py
+tests/test_migrations.py
 tests/test_simulation.py
+tests/test_validation.py
